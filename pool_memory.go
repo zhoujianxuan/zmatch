@@ -1,11 +1,12 @@
 package zmatch
 
+import "sync"
+
 type MemoryPoolService struct {
-	PoolMap       map[string]*Queue
-	PlayerRoomMap map[string][]*Room
+	PoolMap sync.Map
 }
 
-var memoryPoolService = &MemoryPoolService{PoolMap: map[string]*Queue{}}
+var memoryPoolService = &MemoryPoolService{}
 
 //Queue A FIFO queue.
 type Queue []*Room
@@ -28,8 +29,12 @@ func (q *Queue) IsEmpty() bool {
 }
 
 func (r *MemoryPoolService) RPop(key string) (*Room, error) {
-	queue, ok := r.PoolMap[key]
-	if !ok || queue.IsEmpty() {
+	data, ok := r.PoolMap.Load(key)
+	if !ok {
+		return nil, ErrNotFound
+	}
+	queue := data.(*Queue)
+	if queue.IsEmpty() {
 		return nil, ErrNotFound
 	}
 
@@ -37,17 +42,35 @@ func (r *MemoryPoolService) RPop(key string) (*Room, error) {
 }
 
 func (r *MemoryPoolService) LPush(key string, room *Room) error {
-	_, ok := r.PoolMap[key]
-	if !ok {
-		r.PoolMap[key] = &Queue{}
+	if data, ok := r.PoolMap.Load(key); !ok {
+		queue := &Queue{}
+		queue.Push(room)
+		r.PoolMap.Store(key, queue)
+	} else {
+		queue := data.(*Queue)
+		queue.Push(room)
 	}
-
-	r.PoolMap[key].Push(room)
 	return nil
 }
 
 func (r *MemoryPoolService) LRange(key string) ([]*Room, error) {
-	return nil, nil
+	data, ok := r.PoolMap.Load(key)
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	queue := data.(*Queue)
+	if queue.IsEmpty() {
+		return nil, ErrNotFound
+	}
+
+	var rooms []*Room
+	var i int
+	for !queue.IsEmpty() && i < 1000 {
+		i++
+		rooms = append(rooms, queue.Pop())
+	}
+	return rooms, nil
 }
 
 func (r *MemoryPoolService) Clean(key string, room *Room) error {

@@ -1,31 +1,63 @@
 package zmatch
 
 import (
-	"log"
+	"fmt"
+	"math/rand"
 	"time"
 )
 
 type PKMatchRequest struct {
-	Mode       string    `json:"mode"`
-	Players    []*Player `json:"players"`
-	MaxPlayers int       `json:"maxPlayers"`
-	MinPlayers int       `json:"minPlayers"`
+	Mode           string        `json:"mode"`
+	Players        []*Player     `json:"players"`
+	MaxPlayers     int           `json:"max_players"`
+	MinPlayers     int           `json:"min_players"`
+	AfterStartTime time.Duration `json:"after_start_time"`
 	// ...
 }
 
 type PKMatchResponse struct {
-	RoomID string `json:"room_id"`
+	Room *Room `json:"room"`
 }
 
-func PKMatch(request *PKMatchRequest) (*PKMatchResponse, error) {
-	id, _ := time.Now().MarshalText()
+const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-	room := NewRoom(string(id))
+var src = rand.NewSource(time.Now().UnixNano())
+
+const (
+	// 6 bits to represent a letter index
+	letterIdBits = 6
+	// All 1-bits as many as letterIdBits
+	letterIdMask = 1<<letterIdBits - 1
+	letterIdMax  = 63 / letterIdBits
+)
+
+func randStr(n int) string {
+	b := make([]byte, n)
+	// A rand.Int63() generates 63 random bits, enough for letterIdMax letters!
+	for i, cache, remain := n-1, src.Int63(), letterIdMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = src.Int63(), letterIdMax
+		}
+		if idx := int(cache & letterIdMask); idx < len(letters) {
+			b[i] = letters[idx]
+			i--
+		}
+		cache >>= letterIdBits
+		remain--
+	}
+	return string(b)
+}
+
+//PKMatch 匹配入口
+func PKMatch(request *PKMatchRequest) (*PKMatchResponse, error) {
+	id := fmt.Sprintf("%d%s", time.Now().UnixNano(), randStr(8))
+
+	room := NewRoom(id)
 	room.Mode = request.Mode
 	room.Players = request.Players
 	room.MaxPlayers = request.MaxPlayers
 	room.MinPlayers = request.MinPlayers
-	room.LastStartTime = time.Now().Add(time.Minute).UnixNano()
+	room.LastStartTime = time.Now().Add(request.AfterStartTime).UnixNano()
 
 	service := GetPoolService()
 	room, err := GetSuitableRoom(room, service)
@@ -35,7 +67,7 @@ func PKMatch(request *PKMatchRequest) (*PKMatchResponse, error) {
 
 	if room.CanStart() {
 		// start
-		log.Println("start")
+		MatchStart(room)
 	} else {
 		for _, player := range room.Players {
 			err = service.PlayerSaveRoom(player, room)
@@ -49,10 +81,10 @@ func PKMatch(request *PKMatchRequest) (*PKMatchResponse, error) {
 			return nil, err
 		}
 	}
-	return &PKMatchResponse{RoomID: room.ID}, nil
+	return &PKMatchResponse{Room: room}, nil
 }
 
-func JudgeSuitableRoom(room, pRoom *Room) bool {
+func judgeSuitableRoom(room, pRoom *Room) bool {
 	if room.GetPlayerCount() >= room.MaxPlayers {
 		return false
 	}
@@ -75,7 +107,7 @@ func GetSuitableRoom(room *Room, service PoolService) (*Room, error) {
 		} else if err != nil {
 			return nil, err
 		}
-		if JudgeSuitableRoom(room, pRoom) {
+		if judgeSuitableRoom(room, pRoom) {
 			pRoom.Players = append(pRoom.Players, room.Players...)
 			for _, player := range room.Players {
 				err = service.PlayerSaveRoom(player, pRoom)
@@ -85,8 +117,7 @@ func GetSuitableRoom(room *Room, service PoolService) (*Room, error) {
 			}
 			return pRoom, nil
 		}
-
-		_ = service.LPush(room.Mode, room)
+		_ = service.LPush(pRoom.Mode, pRoom)
 	}
 	return room, nil
 }

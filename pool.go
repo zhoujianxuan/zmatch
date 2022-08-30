@@ -7,20 +7,20 @@ var (
 )
 
 type PoolService interface {
-	// RPop 出队(根据key进行隔离)，要保证出队之后匹配池中不会存在房间
+	// RPop Dequeue (isolation based on key), to ensure that there will be no room in the matching pool after dequeuing
 	RPop(key string) (*Room, error)
-	// LPush 入队
+	// LPush join the team
 	LPush(key string, room *Room) error
-	// LRange 批量出队
+	// LRange Dequeue in batches
 	LRange(key string) ([]*Room, error)
-	// Clean 清理房间所有相关信息
+	// Clean All information about cleaning the room
 	Clean(key string, room *Room) error
 
-	// PlayerSaveRoom 玩家保存自己的房间信息
+	// PlayerSaveRoom Players save their room information
 	PlayerSaveRoom(player *Player, room *Room) error
-	// PlayerDelRoom 玩家移除自己的房间信息
+	// PlayerDelRoom Player removes their room information
 	PlayerDelRoom(player *Player, roomId string) error
-	// PlayerGetRoom 玩家获取自己的房间信息
+	// PlayerGetRoom Players get their own room information
 	PlayerGetRoom(player *Player) ([]*Room, error)
 }
 

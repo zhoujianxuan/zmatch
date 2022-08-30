@@ -1,20 +1,31 @@
 package zmatch
 
 import (
+	"fmt"
+	"math/rand"
 	"testing"
+	"time"
 )
 
 func TestPKMatch(t *testing.T) {
-	for i := 0; i < 10; i++ {
-		_, _ = PKMatch(&PKMatchRequest{
-			Mode: "test",
-			Players: []*Player{
-				{
-					ID: "155211",
-				},
-			},
-			MaxPlayers: 5,
-			MinPlayers: 5,
-		})
+	CycleCheck()
+	RegisterMatchStartNotice(func(room *Room) {
+		fmt.Println(room.ToString())
+	})
+
+	for i := 0; i < 100; i++ {
+		request := &PKMatchRequest{
+			Mode:       "test",
+			MaxPlayers: 4,
+			MinPlayers: 3,
+		}
+		r := rand.Int()%4 + 1
+		for j := 0; j < r; j++ {
+			request.Players = append(request.Players, &Player{
+				ID: randStr(6),
+			})
+		}
+		time.Sleep(500 * time.Millisecond)
+		_, _ = PKMatch(request)
 	}
 }
