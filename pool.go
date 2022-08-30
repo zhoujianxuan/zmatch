@@ -16,6 +16,12 @@ type PoolService interface {
 	// Clean All information about cleaning the room
 	Clean(key string, room *Room) error
 
+	SaveRoomPlayers(roomId string, players []*Player) error
+
+	GetRoomPlayers(roomId string) ([]*Player, error)
+
+	DelRoomPlayers(roomId string, userIds []string) error
+
 	// PlayerSaveRoom Players save their room information
 	PlayerSaveRoom(player *Player, room *Room) error
 	// PlayerDelRoom Player removes their room information

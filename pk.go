@@ -54,13 +54,12 @@ func PKMatch(request *PKMatchRequest) (*PKMatchResponse, error) {
 
 	room := NewRoom(id)
 	room.Mode = request.Mode
-	room.Players = request.Players
 	room.MaxPlayers = request.MaxPlayers
 	room.MinPlayers = request.MinPlayers
 	room.LastStartTime = time.Now().Add(request.AfterStartTime).UnixNano()
 
 	service := GetPoolService()
-	room, err := GetSuitableRoom(room, service)
+	room, err := GetSuitableRoom(room, request.Players, service)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +68,8 @@ func PKMatch(request *PKMatchRequest) (*PKMatchResponse, error) {
 		// start
 		MatchStart(room)
 	} else {
-		for _, player := range room.Players {
+		_ = service.SaveRoomPlayers(room.ID, request.Players)
+		for _, player := range request.Players {
 			err = service.PlayerSaveRoom(player, room)
 			if err != nil {
 				return nil, err
@@ -84,22 +84,24 @@ func PKMatch(request *PKMatchRequest) (*PKMatchResponse, error) {
 	return &PKMatchResponse{Room: room}, nil
 }
 
-func judgeSuitableRoom(room, pRoom *Room) bool {
-	if room.GetPlayerCount() >= room.MaxPlayers {
-		return false
-	}
-	if pRoom.GetPlayerCount() >= pRoom.MaxPlayers {
+func judgeSuitableRoom(userCount, maxPlayers int, pRoom *Room) bool {
+	if userCount >= maxPlayers {
 		return false
 	}
 
-	total := pRoom.GetPlayerCount() + room.GetPlayerCount()
-	if total <= pRoom.MaxPlayers && total <= room.MaxPlayers {
+	pRoomUserCount := pRoom.GetPlayerCount()
+	if pRoomUserCount >= pRoom.MaxPlayers {
+		return false
+	}
+
+	total := pRoomUserCount + userCount
+	if total <= pRoom.MaxPlayers && total <= maxPlayers {
 		return true
 	}
 	return false
 }
 
-func GetSuitableRoom(room *Room, service PoolService) (*Room, error) {
+func GetSuitableRoom(room *Room, players []*Player, service PoolService) (*Room, error) {
 	for i := 0; i < 3; i++ {
 		pRoom, err := service.RPop(room.Mode)
 		if err == ErrNotFound {
@@ -107,14 +109,8 @@ func GetSuitableRoom(room *Room, service PoolService) (*Room, error) {
 		} else if err != nil {
 			return nil, err
 		}
-		if judgeSuitableRoom(room, pRoom) {
-			pRoom.Players = append(pRoom.Players, room.Players...)
-			for _, player := range room.Players {
-				err = service.PlayerSaveRoom(player, pRoom)
-				if err != nil {
-					return nil, err
-				}
-			}
+		if judgeSuitableRoom(len(players), room.MaxPlayers, pRoom) {
+			_ = service.SaveRoomPlayers(pRoom.ID, players)
 			return pRoom, nil
 		}
 		_ = service.LPush(pRoom.Mode, pRoom)

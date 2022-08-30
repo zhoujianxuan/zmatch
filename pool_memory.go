@@ -3,7 +3,9 @@ package zmatch
 import "sync"
 
 type MemoryPoolService struct {
-	PoolMap sync.Map
+	PoolMap   sync.Map
+	PlayerMap sync.Map
+	lock      sync.Mutex
 }
 
 var memoryPoolService = &MemoryPoolService{}
@@ -33,12 +35,17 @@ func (r *MemoryPoolService) RPop(key string) (*Room, error) {
 	if !ok {
 		return nil, ErrNotFound
 	}
+
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
 	queue := data.(*Queue)
 	if queue.IsEmpty() {
 		return nil, ErrNotFound
 	}
 
-	return queue.Pop(), nil
+	room := queue.Pop()
+	return room, nil
 }
 
 func (r *MemoryPoolService) LPush(key string, room *Room) error {
@@ -74,6 +81,48 @@ func (r *MemoryPoolService) LRange(key string) ([]*Room, error) {
 }
 
 func (r *MemoryPoolService) Clean(key string, room *Room) error {
+	return nil
+}
+
+func (r *MemoryPoolService) SaveRoomPlayers(roomId string, players []*Player) error {
+	data, ok := r.PlayerMap.Load(roomId)
+	if !ok {
+		r.PlayerMap.Store(roomId, players)
+		return nil
+	}
+
+	arr := data.([]*Player)
+	arr = append(arr, players...)
+	r.PlayerMap.Store(roomId, arr)
+	return nil
+}
+
+func (r *MemoryPoolService) GetRoomPlayers(roomId string) ([]*Player, error) {
+	data, ok := r.PlayerMap.Load(roomId)
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	arr := data.([]*Player)
+	return arr, nil
+}
+
+func (r *MemoryPoolService) DelRoomPlayers(roomId string, userIds []string) error {
+	data, ok := r.PlayerMap.Load(roomId)
+	if !ok {
+		return ErrNotFound
+	}
+
+	arr := data.([]*Player)
+	for _, uid := range userIds {
+		for i, player := range arr {
+			if player.ID == uid {
+				arr = append(arr[:i], arr[i+1:]...)
+				break
+			}
+		}
+	}
+	r.PlayerMap.Store(roomId, arr)
 	return nil
 }
 

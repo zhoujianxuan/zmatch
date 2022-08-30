@@ -9,7 +9,7 @@ func GetAllKeys() []string {
 	return []string{"test"}
 }
 
-func CycleCheck() {
+func CycleCheck(d time.Duration) {
 	keys := GetAllKeys()
 	for _, key := range keys {
 		go func(key string) {
@@ -19,7 +19,7 @@ func CycleCheck() {
 				}
 			}()
 			for {
-				t := time.NewTimer(time.Second)
+				t := time.NewTimer(d)
 				select {
 				case <-t.C:
 					service := GetPoolService()

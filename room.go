@@ -11,12 +11,11 @@ type Player struct {
 }
 
 type Room struct {
-	ID            string    `json:"id"`
-	Mode          string    `json:"mode"`
-	Players       []*Player `json:"players"`
-	MaxPlayers    int       `json:"maxPlayers"`
-	MinPlayers    int       `json:"minPlayers"`
-	LastStartTime int64     `json:"last_start_time"`
+	ID            string `json:"id"`
+	Mode          string `json:"mode"`
+	MaxPlayers    int    `json:"maxPlayers"`
+	MinPlayers    int    `json:"minPlayers"`
+	LastStartTime int64  `json:"last_start_time"`
 	// ...
 }
 
@@ -25,7 +24,9 @@ func NewRoom(id string) *Room {
 }
 
 func (r *Room) GetPlayerCount() int {
-	return len(r.Players)
+	service := GetPoolService()
+	players, _ := service.GetRoomPlayers(r.ID)
+	return len(players)
 }
 
 func (r *Room) CanStart() bool {
@@ -40,7 +41,9 @@ func (r *Room) CanStart() bool {
 
 func (r *Room) ToString() string {
 	var playerStr string
-	for _, player := range r.Players {
+	service := GetPoolService()
+	players, _ := service.GetRoomPlayers(r.ID)
+	for _, player := range players {
 		playerStr += fmt.Sprintf(" %+v ", player)
 	}
 	return fmt.Sprintf("id:%s, players:%s, mode:%s, minPlayers:%d, maxPlayers:%d",
